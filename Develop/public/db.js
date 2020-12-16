@@ -1,13 +1,11 @@
 let db;
-// create a new db request for a "budget" database.
-const request = window.indexedDB.open("budget", 1);
 
+// Requests
+const request = window.indexedDB.open("budget", 1);
 request.onupgradeneeded = function (event) {
   const db = event.target.result;
-  // create object store called "pending" and set autoIncrement to true
   db.createObjectStore("pending", { keyPath: "id", autoIncrement: true });
 };
-
 request.onsuccess = function (event) {
   db = event.target.result;
 
@@ -15,7 +13,36 @@ request.onsuccess = function (event) {
     checkDatabase();
   }
 };
-
 request.onerror = function (event) {
   console.log(event);
 };
+
+// saveRecord/checkDatabase Functions
+function checkDatabase() {
+  const transaction = db.transaction(["pending"]);
+  const objectStore = transaction.objectStore("pending");
+  const getAll = objectStore.getAll();
+
+  getAll.onsuccess = function () {
+    if (getAll.result.length > 0) {
+      fetch("/api/transaction/bulk", {
+        method: "POST",
+        body: JSON.stringify(getAll.result),
+        headers: {
+          Accept: "application/json, text/plain, */*",
+          "Content-Type": "application/json",
+        },
+      })
+        .then((response) => response.json())
+        .then(() => {
+          const transaction = db.transaction(["pending"], "readwrite");
+          const objectStore = transaction.objectStore("pending");
+
+          objectStore.clear();
+        });
+    }
+  };
+}
+
+// Listen for reconnect
+window.addEventListener("online", checkDatabase);
